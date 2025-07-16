@@ -207,12 +207,8 @@ else
 fi
 
 # ==============================================================================
-# Final Summary (longer infobox for key info, still no interaction)
+# Final Summary - using msgbox instead of infobox to keep window open
 # ==============================================================================
-whiptail --title "Installation Complete" --infobox "GoPanel installation is complete!\n\nIt is running as root from /opt/gopanel.\n\nTo check status: sudo systemctl status gopanel\nTo view logs: sudo journalctl -u gopanel -f\n\nRemember to log out and back in if you added yourself to the Docker group for changes to take effect." 18 78
-sleep 10 # Give user time to read final message
+whiptail --title "Installation Complete" --msgbox "GoPanel installation is complete!\n\nIt is running as root from /opt/gopanel.\n\nTo check status: sudo systemctl status gopanel\nTo view logs: sudo journalctl -u gopanel -f\n\nRemember to log out and back in if you added yourself to the Docker group for changes to take effect." 18 78
 
 echo -e "${GREEN}✅ GoPanel installation finished. Enjoy!${NC}"
-
-# Clear the screen after the final message if desired for a clean exit
-# clear
