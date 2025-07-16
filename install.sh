@@ -135,11 +135,18 @@ echo -e "${BLUE}================================================================
 echo -e "${BLUE}  🚀 SECTION: Project Files Preparation and Copying                    ${NC}"
 echo -e "${BLUE}=======================================================================${NC}"
 # ==============================================================================
-
 # Stop and remove existing GoPanel service before extracting new files
 echo -e "${YELLOW}📌 Stopping and removing any existing GoPanel service...${NC}"
-sudo systemctl disable gopanel.service && sudo systemctl stop gopanel.service && sudo rm /etc/systemd/system/gopanel.service && sudo systemctl daemon-reload
-echo -e "${GREEN}✅ Existing GoPanel service stopped and removed.${NC}"
+sudo systemctl disable gopanel.service || true
+sudo systemctl stop gopanel.service || true
+if [ -f /etc/systemd/system/gopanel.service ]; then
+    sudo rm /etc/systemd/system/gopanel.service
+    echo -e "${GREEN}✅ gopanel.service file removed.${NC}"
+else
+    echo -e "${YELLOW}⚠️ gopanel.service file not found, skipping removal.${NC}"
+fi
+sudo systemctl daemon-reload
+echo -e "${GREEN}✅ Existing GoPanel service handled.${NC}"
 
 SEVENZ_FILE=$(find . -maxdepth 1 -type f -name "*.7z" | head -n 1)
 
@@ -158,6 +165,7 @@ else
     PROJECT_SOURCE=.
     echo -e "${GREEN}✅ Project files prepared from current directory.${NC}"
 fi
+
 
 run_with_gauge "File Management" "Copying project files to /opt/gopanel and setting permissions..." "sudo rm -rf /opt/gopanel && sudo mkdir -p /opt/gopanel && sudo cp -r \"$PROJECT_SOURCE\"/* \"$PROJECT_SOURCE\"/.* /opt/gopanel 2>/dev/null || true && sudo chown -R root:root /opt/gopanel"
 if [ $? -eq 0 ]; then
