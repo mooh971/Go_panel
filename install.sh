@@ -50,11 +50,11 @@ declare -a STEPS=(
     "Installing core development tools (build-essential, curl, wget, git, p7zip-full)..." "sudo apt install -y build-essential curl wget git p7zip-full"
     "Checking Docker installation..." "" # Placeholder for a check
     "Downloading and installing Docker Engine..." "curl -fsSL https://get.docker.com | sudo sh"
-    "Adding current user to Docker group..." "sudo usermod -aG docker \$USER" # Changed \$USER to prevent early expansion
+    "Adding current user to Docker group..." "sudo usermod -aG docker \$USER" # Use \$USER for deferred expansion
     "Downloading Go language (v1.24.5)..." "wget -q https://dl.google.com/go/go1.24.5.linux-amd64.tar.gz -O /tmp/go1.24.5.linux-amd64.tar.gz"
     "Extracting Go language to /usr/local..." "sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go1.24.5.linux-amd64.tar.gz"
     "Preparing project files (extracting/copying)..." "" # Placeholder for project logic
-    "Copying project files to /opt/gopanel and setting permissions..." "sudo rm -rf /opt/gopanel && sudo mkdir -p /opt/gopanel && sudo cp -r \"\$PROJECT_SOURCE\"/. \"/opt/gopanel/\" 2>/dev/null || true && sudo chown -R root:root /opt/gopanel"
+    "Copying project files to /opt/gopanel and setting permissions..." "sudo rm -rf /opt/gopanel && sudo mkdir -p /opt/gopanel && sudo cp -r \"\$PROJECT_SOURCE\"/. \"/opt/gopanel/\" 2>/dev/null || true && sudo chown -R root:root /opt/gopanel" # Use \$PROJECT_SOURCE for deferred expansion
     "Making GoPanel binary executable..." "sudo chmod +x /opt/gopanel/gopanel"
     "Creating systemd service file for GoPanel..." "sudo tee /etc/systemd/system/gopanel.service > /dev/null <<EOF
 [Unit]
@@ -84,6 +84,9 @@ TOTAL_PERCENTAGE_PER_STEP=$((100 / (TOTAL_MAIN_STEPS / 2))) # Each pair is desc+
 GLOBAL_PROGRESS=0
 # Declare PROJECT_SOURCE globally for use inside the subshell and outer script
 PROJECT_SOURCE=""
+
+# This variable should NOT be local if it's assigned outside a function
+gauge_status=0 # Initialize to a default value
 
 (
     # Start the gauge output
@@ -153,7 +156,8 @@ PROJECT_SOURCE=""
     echo 100 # Ensure 100% when all commands are done
 ) | whiptail --gauge "Starting GoPanel installation. Please wait..." 15 80 0 --title "GoPanel Installation Progress"
 
-local gauge_status=$? # This line was causing the error if declared local outside function
+# Assign status here, outside the subshell, not using 'local'
+gauge_status=$? 
 if [ $gauge_status -ne 0 ]; then
     whiptail --title "Installation Failed!" --msgbox "GoPanel installation encountered an error.\nPlease review the messages above or try again." 10 80
     exit 1 # Exit script if gauge process failed
