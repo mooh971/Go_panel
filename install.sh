@@ -25,48 +25,42 @@ fi
 display_info() {
     local title="$1"
     local message="$2"
-    local duration=${3:-1} # Default duration is 1 second, shorter for less interruption
-    # Increased size for info boxes
+    local duration=${3:-1}
     whiptail --title "$title" --infobox "$message" 10 80
     sleep $duration
 }
 
 # Function to run a command with a whiptail gauge progress bar
-# Usage: run_with_gauge "Title" "Message" "command_to_run"
 run_with_gauge() {
     local title="$1"
     local message="$2"
     local command="$3"
     local progress=0
 
-    # Execute the command in the background, redirecting its output to null
     eval "$command" > /dev/null 2>&1 &
     local pid=$!
 
-    # Display gauge in a subshell
     (
         while kill -0 "$pid" 2>/dev/null; do
-            # Simulate progress by incrementing
             progress=$((progress + 5))
-            if [ $progress -gt 95 ]; then progress=95; fi # Cap at 95% until finished
+            if [ $progress -gt 95 ]; then progress=95; fi
             echo $progress
             sleep 0.2
         done
-        wait "$pid" # Ensure command really finishes
-        echo 100 # Set to 100% when done
-    ) | whiptail --gauge "$message" 10 80 0 --title "$title" # Increased size for gauge
+        wait "$pid"
+        echo 100
+    ) | whiptail --gauge "$message" 10 80 0 --title "$title"
     local status=$?
     return $status
 }
 
 # --- Welcome Screen with Yes/No ---
-if (whiptail --title "GoPanel Installer" --yesno "Welcome to the GoPanel Installer!\n\nThis script will set up GoPanel on your system. Do you want to continue with the installation?" 15 80) then # Larger size for welcome
+if (whiptail --title "GoPanel Installer" --yesno "Welcome to the GoPanel Installer!\n\nThis script will set up GoPanel on your system. Do you want to continue with the installation?" 15 80) then
     display_info "GoPanel Installer" "Starting installation process..." 2
 else
-    whiptail --title "GoPanel Installer" --msgbox "Installation aborted by user. Exiting." 10 80 # Larger size for abort message
+    whiptail --title "GoPanel Installer" --msgbox "Installation aborted by user. Exiting." 10 80
     exit 1
 fi
-# --- End Welcome Screen ---
 
 # ==============================================================================
 echo -e "${BLUE}=======================================================================${NC}"
@@ -78,7 +72,7 @@ run_with_gauge "Requirements" "Updating system package lists..." "sudo apt updat
 if [ $? -eq 0 ]; then
     run_with_gauge "Requirements" "Installing core development tools (build-essential, curl, wget, git, p7zip-full)..." "sudo apt install -y build-essential curl wget git p7zip-full"
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ Basic requirements installation complete.${NC}" # Use echo for completion messages
+        echo -e "${GREEN}✅ Basic requirements installation complete.${NC}"
     else
         echo -e "${RED}❌ Failed to install basic requirements. Exiting.${NC}"
         exit 1
@@ -141,6 +135,11 @@ echo -e "${BLUE}================================================================
 echo -e "${BLUE}  🚀 SECTION: Project Files Preparation and Copying                    ${NC}"
 echo -e "${BLUE}=======================================================================${NC}"
 # ==============================================================================
+
+# Stop and remove existing GoPanel service before extracting new files
+echo -e "${YELLOW}📌 Stopping and removing any existing GoPanel service...${NC}"
+sudo systemctl disable gopanel.service && sudo systemctl stop gopanel.service && sudo rm /etc/systemd/system/gopanel.service && sudo systemctl daemon-reload
+echo -e "${GREEN}✅ Existing GoPanel service stopped and removed.${NC}"
 
 SEVENZ_FILE=$(find . -maxdepth 1 -type f -name "*.7z" | head -n 1)
 
@@ -212,15 +211,11 @@ else
 fi
 
 # ==============================================================================
-# Final Summary - using msgbox instead of infobox to keep window open
+# Final Summary
 # ==============================================================================
 
-# Get the primary IP address of the machine
-# This command tries to get the IP address that is most likely used for outbound connections.
-# It filters out localhost and only takes the first one.
 LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
-# Default to localhost if no suitable IP is found
 if [ -z "$LOCAL_IP" ]; then
     LOCAL_IP="localhost"
 fi
