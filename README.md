@@ -23,6 +23,7 @@ Easily manage your server with simple steps — from installing services to mana
 Run the following commands step by step:
 
 ```bash
+sudo apt update && sudo apt install -y git
 git clone https://github.com/mooh971/Go_panel.git
 cd Go_panel/
 chmod +x install.sh
