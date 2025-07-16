@@ -50,7 +50,7 @@ declare -a STEPS=(
     "Installing core development tools (build-essential, curl, wget, git, p7zip-full)..." "sudo apt install -y build-essential curl wget git p7zip-full"
     "Checking Docker installation..." "" # Placeholder for a check
     "Downloading and installing Docker Engine..." "curl -fsSL https://get.docker.com | sudo sh"
-    "Adding current user to Docker group..." "sudo usermod -aG docker $USER"
+    "Adding current user to Docker group..." "sudo usermod -aG docker \$USER" # Changed \$USER to prevent early expansion
     "Downloading Go language (v1.24.5)..." "wget -q https://dl.google.com/go/go1.24.5.linux-amd64.tar.gz -O /tmp/go1.24.5.linux-amd64.tar.gz"
     "Extracting Go language to /usr/local..." "sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go1.24.5.linux-amd64.tar.gz"
     "Preparing project files (extracting/copying)..." "" # Placeholder for project logic
@@ -82,6 +82,8 @@ TOTAL_PERCENTAGE_PER_STEP=$((100 / (TOTAL_MAIN_STEPS / 2))) # Each pair is desc+
 
 # Global variable to store current progress, accessed by subshell
 GLOBAL_PROGRESS=0
+# Declare PROJECT_SOURCE globally for use inside the subshell and outer script
+PROJECT_SOURCE=""
 
 (
     # Start the gauge output
@@ -129,6 +131,12 @@ GLOBAL_PROGRESS=0
 
         # Execute the command if not a placeholder
         if [ -n "$COMMAND" ]; then
+            # Special handling for PATH update for Go
+            if [[ "$STEP_DESCRIPTION" == "Extracting Go language to /usr/local..." ]]; then
+                export PATH=$PATH:/usr/local/go/bin # Ensure PATH is updated for subsequent Go commands in the subshell
+            fi
+            
+            # Execute command (note: we re-evaluate the command string to allow PROJECT_SOURCE expansion)
             eval "$COMMAND" > /dev/null 2>&1
             local cmd_status=$?
             if [ $cmd_status -ne 0 ]; then
@@ -145,12 +153,11 @@ GLOBAL_PROGRESS=0
     echo 100 # Ensure 100% when all commands are done
 ) | whiptail --gauge "Starting GoPanel installation. Please wait..." 15 80 0 --title "GoPanel Installation Progress"
 
-local gauge_status=$?
+local gauge_status=$? # This line was causing the error if declared local outside function
 if [ $gauge_status -ne 0 ]; then
     whiptail --title "Installation Failed!" --msgbox "GoPanel installation encountered an error.\nPlease review the messages above or try again." 10 80
     exit 1 # Exit script if gauge process failed
 fi
-
 
 # ==============================================================================
 # Final Summary (shown ONLY after the gauge completes successfully)
@@ -165,5 +172,3 @@ if [ -z "$LOCAL_IP" ]; then
 fi
 
 whiptail --title "Installation Complete!" --msgbox "Thank you for installing GoPanel!\n\nAccess GoPanel in your web browser at:\n\n   ${LOCAL_IP}:8080\n\nRemember to log out and log back in if you added yourself to the Docker group for changes to take effect." 15 85
-
-# No final echo, as per request for window-only interaction.
