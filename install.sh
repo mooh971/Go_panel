@@ -2,7 +2,7 @@
 
 set -e
 
-# Define colors (will not be used for echo, but kept in case of future TUI elements)
+# Define colors (not used for terminal echo, but kept for consistency)
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -11,15 +11,14 @@ NC='\033[0m' # No Color
 
 # Check for whiptail and install if not found
 if ! command -v whiptail &>/dev/null; then
-    # Only echo here as whiptail is not present yet for initial check
-    echo -e "${YELLOW}Whiptail is not installed. Attempting to install to proceed...${NC}" >&2 # Output to stderr
+    echo -e "${YELLOW}Whiptail is not installed. Attempting to install to proceed...${NC}" >&2
     sudo apt update > /dev/null 2>&1
     sudo apt install -y whiptail > /dev/null 2>&1
     if ! command -v whiptail &>/dev/null; then
         echo -e "${RED}Error: Whiptail could not be installed. Please install it manually: sudo apt install whiptail${NC}" >&2
         exit 1
     fi
-    echo -e "${GREEN}Whiptail installed successfully. Resuming installation through GUI.${NC}" > /dev/null # Suppress after install
+    echo -e "${GREEN}Whiptail installed successfully. Resuming installation through GUI.${NC}" > /dev/null
 fi
 
 # Function to display an info box (non-interactive, transient)
@@ -29,42 +28,6 @@ display_info() {
     local duration=${3:-1} # Default duration is 1 second, shorter for less interruption
     whiptail --title "$title" --infobox "$message" 10 80
     sleep $duration
-}
-
-# Function to run a command with a whiptail gauge progress bar
-# Usage: run_with_gauge "Title" "Message" "command_to_run" "Failure message"
-# IMPORTANT: This version will display a persistent ERROR box on failure,
-# but will NOT display a success infobox to avoid flicker.
-run_with_gauge() {
-    local title="$1"
-    local message="$2"
-    local command="$3"
-    local failure_msg="$4" # Only failure message needed now
-
-    local progress=0
-
-    # Execute the command in the background, redirecting its output to null
-    eval "$command" > /dev/null 2>&1 &
-    local pid=$!
-
-    (
-        while kill -0 "$pid" 2>/dev/null; do
-            progress=$((progress + 5))
-            if [ $progress -gt 95 ]; then progress=95; fi
-            echo $progress
-            sleep 0.2
-        done
-        wait "$pid" # Ensure command really finishes
-        echo 100
-    ) | whiptail --gauge "$message" 10 80 0 --title "$title"
-
-    local status=$?
-    if [ $status -ne 0 ]; then
-        # Display an ERROR msgbox that requires user interaction
-        whiptail --title "ERROR: $title" --msgbox "$failure_msg" 10 80
-        return 1 # Indicate failure
-    fi
-    return 0 # Indicate success
 }
 
 # --- Welcome Screen with Yes/No ---
@@ -77,79 +40,23 @@ fi
 # --- End Welcome Screen ---
 
 # ==============================================================================
-# SECTION: Installing Basic System Requirements
+# Master Installation Gauge
+# This will run all steps under a single, continuous progress bar
 # ==============================================================================
 
-run_with_gauge "Requirements" "Updating system package lists..." "sudo apt update" \
-    "Failed to update apt packages. Exiting." || exit 1
-
-run_with_gauge "Requirements" "Installing core development tools (build-essential, curl, wget, git, p7zip-full)..." \
-    "sudo apt install -y build-essential curl wget git p7zip-full" \
-    "Failed to install basic requirements. Exiting." || exit 1
-
-
-# ==============================================================================
-# SECTION: Docker Installation and Setup
-# ==============================================================================
-
-if ! command -v docker &>/dev/null; then
-    display_info "Docker" "Docker is not installed. Installing it now automatically..." 2
-    run_with_gauge "Docker" "Downloading and installing Docker Engine..." "curl -fsSL https://get.docker.com | sudo sh" \
-        "Failed to install Docker. Exiting." || exit 1
-else
-    display_info "Docker" "Docker is already installed. Skipping installation." 1.5
-fi
-
-run_with_gauge "Docker" "Adding user to Docker group..." "sudo usermod -aG docker $USER" \
-    "Failed to add user to Docker group. Please try manually logging out and back in, then re-running the script." || exit 1
-
-
-# ==============================================================================
-# SECTION: Go Language Installation
-# ==============================================================================
-
-GO_VERSION=1.24.5
-run_with_gauge "Go Installation" "Downloading Go $GO_VERSION..." "wget -q https://dl.google.com/go/go$GO_VERSION.linux-amd64.tar.gz -O /tmp/go$GO_VERSION.linux-amd64.tar.gz" \
-    "Failed to download Go $GO_VERSION. Exiting." || exit 1
-
-run_with_gauge "Go Installation" "Extracting Go to /usr/local..." "sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go$GO_VERSION.linux-amd64.tar.gz" \
-    "Failed to extract Go. Exiting." || exit 1
-
-# Manually update PATH for the current script's execution
-export PATH=$PATH:/usr/local/go/bin
-
-
-# ==============================================================================
-# SECTION: Project Files Preparation and Copying
-# ==============================================================================
-
-SEVENZ_FILE=$(find . -maxdepth 1 -type f -name "*.7z" | head -n 1)
-PROJECT_SOURCE="" # Initialize
-
-if [ -f "$SEVENZ_FILE" ]; then
-    display_info "Project Setup" "Found archive $SEVENZ_FILE - extracting..." 1
-    run_with_gauge "Project Setup" "Extracting project files from $SEVENZ_FILE..." "rm -rf ./gopanel_extracted && mkdir -p ./gopanel_extracted && 7z x -y \"$SEVENZ_FILE\" -o./gopanel_extracted" \
-        "Failed to extract project files. Exiting." || exit 1
-    PROJECT_SOURCE=./gopanel_extracted
-else
-    display_info "Project Setup" "No 7z archive found. Copying from current directory." 1.5
-    PROJECT_SOURCE=.
-fi
-
-run_with_gauge "File Management" "Copying project files to /opt/gopanel and setting permissions..." \
-    "sudo rm -rf /opt/gopanel && sudo mkdir -p /opt/gopanel && sudo cp -r \"$PROJECT_SOURCE\"/. \"/opt/gopanel/\" 2>/dev/null || true && sudo chown -R root:root /opt/gopanel" \
-    "Failed to copy project to /opt/gopanel. Exiting." || exit 1
-
-
-# ==============================================================================
-# SECTION: Binary Permissions and Systemd Service Setup
-# ==============================================================================
-
-run_with_gauge "Service Setup" "Making GoPanel binary executable..." "sudo chmod +x /opt/gopanel/gopanel" \
-    "Failed to make GoPanel binary executable." || exit 1
-
-run_with_gauge "Service Setup" "Creating systemd service for GoPanel..." \
-    "sudo tee /etc/systemd/system/gopanel.service > /dev/null <<EOF
+# Define all installation steps as an array of commands and their descriptions
+declare -a STEPS=(
+    "Updating system package lists..." "sudo apt update"
+    "Installing core development tools (build-essential, curl, wget, git, p7zip-full)..." "sudo apt install -y build-essential curl wget git p7zip-full"
+    "Checking Docker installation..." "" # Placeholder for a check
+    "Downloading and installing Docker Engine..." "curl -fsSL https://get.docker.com | sudo sh"
+    "Adding current user to Docker group..." "sudo usermod -aG docker $USER"
+    "Downloading Go language (v1.24.5)..." "wget -q https://dl.google.com/go/go1.24.5.linux-amd64.tar.gz -O /tmp/go1.24.5.linux-amd64.tar.gz"
+    "Extracting Go language to /usr/local..." "sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go1.24.5.linux-amd64.tar.gz"
+    "Preparing project files (extracting/copying)..." "" # Placeholder for project logic
+    "Copying project files to /opt/gopanel and setting permissions..." "sudo rm -rf /opt/gopanel && sudo mkdir -p /opt/gopanel && sudo cp -r \"\$PROJECT_SOURCE\"/. \"/opt/gopanel/\" 2>/dev/null || true && sudo chown -R root:root /opt/gopanel"
+    "Making GoPanel binary executable..." "sudo chmod +x /opt/gopanel/gopanel"
+    "Creating systemd service file for GoPanel..." "sudo tee /etc/systemd/system/gopanel.service > /dev/null <<EOF
 [Unit]
 Description=GoPanel Server
 After=network.target docker.service
@@ -165,17 +72,88 @@ Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-EOF" \
-    "Failed to create systemd service file." || exit 1
+EOF"
+    "Reloading systemd and starting GoPanel service..." "sudo systemctl daemon-reload && sudo systemctl enable gopanel.service && sudo systemctl restart gopanel.service"
+)
 
+# Calculate total percentage steps
+TOTAL_MAIN_STEPS=${#STEPS[@]}
+TOTAL_PERCENTAGE_PER_STEP=$((100 / (TOTAL_MAIN_STEPS / 2))) # Each pair is desc+cmd
 
-run_with_gauge "Service Management" "Reloading systemd and enabling/starting GoPanel service..." \
-    "sudo systemctl daemon-reload && sudo systemctl enable gopanel.service && sudo systemctl restart gopanel.service" \
-    "Failed to start GoPanel service. Please check logs manually using 'sudo journalctl -u gopanel -f'." || exit 1
+# Global variable to store current progress, accessed by subshell
+GLOBAL_PROGRESS=0
+
+(
+    # Start the gauge output
+    for ((i=0; i<TOTAL_MAIN_STEPS; i+=2)); do
+        STEP_DESCRIPTION="${STEPS[i]}"
+        COMMAND="${STEPS[i+1]}"
+
+        # Calculate current progress
+        GLOBAL_PROGRESS=$(((i / 2) * TOTAL_PERCENTAGE_PER_STEP))
+        if [ $GLOBAL_PROGRESS -ge 100 ]; then GLOBAL_PROGRESS=99; fi # Cap for final step
+
+        echo "$GLOBAL_PROGRESS"
+        echo "XXX"
+        echo "$STEP_DESCRIPTION"
+        echo "XXX"
+
+        # Handle special logic steps (Docker check, Project Source)
+        case "$STEP_DESCRIPTION" in
+            "Checking Docker installation...")
+                if command -v docker &>/dev/null; then
+                    # Docker is installed, skip next Docker installation command
+                    echo "$GLOBAL_PROGRESS" # Update progress, but no command executed
+                    echo "XXX"
+                    echo "Docker is already installed. Skipping installation."
+                    echo "XXX"
+                    i=$((i + 2)) # Skip the actual docker install step (desc + cmd)
+                    continue # Go to next iteration of loop
+                fi
+                ;;
+            "Preparing project files (extracting/copying)...")
+                SEVENZ_FILE=$(find . -maxdepth 1 -type f -name "*.7z" | head -n 1)
+                if [ -f "$SEVENZ_FILE" ]; then
+                    COMMAND="rm -rf ./gopanel_extracted && mkdir -p ./gopanel_extracted && 7z x -y \"$SEVENZ_FILE\" -o./gopanel_extracted"
+                    PROJECT_SOURCE="./gopanel_extracted"
+                else
+                    COMMAND="" # No command needed, just set source
+                    PROJECT_SOURCE="."
+                    echo "$GLOBAL_PROGRESS"
+                    echo "XXX"
+                    echo "No 7z archive found. Copying from current directory."
+                    echo "XXX"
+                fi
+                ;;
+        esac
+
+        # Execute the command if not a placeholder
+        if [ -n "$COMMAND" ]; then
+            eval "$COMMAND" > /dev/null 2>&1
+            local cmd_status=$?
+            if [ $cmd_status -ne 0 ]; then
+                # On failure, instantly jump to 100% and exit the subshell with an error
+                echo 100
+                echo "XXX"
+                echo "ERROR: Failed during '$STEP_DESCRIPTION'."
+                echo "Please check the terminal for error messages or try again."
+                echo "XXX"
+                exit 1 # Exit the subshell, whiptail will get non-zero status
+            fi
+        fi
+    done
+    echo 100 # Ensure 100% when all commands are done
+) | whiptail --gauge "Starting GoPanel installation. Please wait..." 15 80 0 --title "GoPanel Installation Progress"
+
+local gauge_status=$?
+if [ $gauge_status -ne 0 ]; then
+    whiptail --title "Installation Failed!" --msgbox "GoPanel installation encountered an error.\nPlease review the messages above or try again." 10 80
+    exit 1 # Exit script if gauge process failed
+fi
 
 
 # ==============================================================================
-# Final Summary
+# Final Summary (shown ONLY after the gauge completes successfully)
 # ==============================================================================
 
 # Get the primary IP address of the machine
