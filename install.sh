@@ -214,6 +214,17 @@ fi
 # ==============================================================================
 # Final Summary - using msgbox instead of infobox to keep window open
 # ==============================================================================
-whiptail --title "Installation Complete" --msgbox "GoPanel installation is complete!\n\nIt is running as root from /opt/gopanel.\n\nTo check status: sudo systemctl status gopanel\nTo view logs: sudo journalctl -u gopanel -f\n\nRemember to log out and back in if you added yourself to the Docker group for changes to take effect." 20 85 # Larger size for final message
 
-echo -e "${GREEN}✅ GoPanel installation finished. Enjoy!${NC}"
+# Get the primary IP address of the machine
+# This command tries to get the IP address that is most likely used for outbound connections.
+# It filters out localhost and only takes the first one.
+LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
+
+# Default to localhost if no suitable IP is found
+if [ -z "$LOCAL_IP" ]; then
+    LOCAL_IP="localhost"
+fi
+
+whiptail --title "Installation Complete!" --msgbox "Thank you for installing GoPanel!\n\nGoPanel is now running as root from /opt/gopanel.\n\nAccess GoPanel in your web browser at:\n\n   ${LOCAL_IP}:8080\n\nTo check service status: sudo systemctl status gopanel\nTo view service logs: sudo journalctl -u gopanel -f\n\nRemember to log out and log back in if you added yourself to the Docker group for changes to take effect." 20 85
+
+echo -e "${GREEN}✅ GoPanel installation finished. Enjoy! Access at ${LOCAL_IP}:8080${NC}"
