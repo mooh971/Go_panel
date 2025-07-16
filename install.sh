@@ -6,18 +6,23 @@ set -e
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Function to simulate a progress bar
+# Function to simulate a progress bar with cleaner output
 # Usage: run_with_progress "Message..." "command_to_run"
 run_with_progress() {
   local message="$1"
   local command="$2"
-  local progress_chars="/-\|"
+  local progress_chars="/-\|" # Spinner characters
   local i=0
   local pid
+  local start_time=$(date +%s)
+  local current_line=$(tput lines) # Get current line number
 
   echo -e "${YELLOW}⏳ $message${NC}"
+  # Move cursor to the next line to show spinner
+  echo ""
 
   # Execute the command in the background, redirecting output to null
   eval "$command" > /dev/null 2>&1 &
@@ -26,20 +31,26 @@ run_with_progress() {
   # Simulate a simple spinner
   while kill -0 "$pid" 2>/dev/null; do
     i=$(( (i+1) % 4 ))
-    echo -ne "  ${progress_chars:$i:1}\r" # \r moves cursor to beginning of line
+    tput cuu1 # Move cursor up one line
+    tput el    # Erase line
+    echo -ne "  ${progress_chars:$i:1} Working...\r"
     sleep 0.1
   done
 
   # Clear the spinner line
-  echo -ne "  \r"
+  tput cuu1 # Move cursor up one line
+  tput el    # Erase line
 
   wait "$pid" # Wait for the actual command to finish
   local status=$?
 
+  local end_time=$(date +%s)
+  local duration=$((end_time - start_time))
+
   if [ $status -eq 0 ]; then
-    echo -e "${GREEN}✅ $message Done.${NC}"
+    echo -e "${GREEN}✅ $message Done (${duration}s).${NC}"
   else
-    echo -e "${RED}❌ $message Failed.${NC}" # Define RED if you want to use it
+    echo -e "${RED}❌ $message Failed (${duration}s).${NC}"
     exit 1
   fi
 }
