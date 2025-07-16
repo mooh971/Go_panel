@@ -225,6 +225,6 @@ if [ -z "$LOCAL_IP" ]; then
     LOCAL_IP="localhost"
 fi
 
-whiptail --title "Installation Complete!" --msgbox "Thank you for installing GoPanel!\n\nAccess GoPanel in your web browser at:\n\n   ${LOCAL_IP}:8080\n\nRemember to log out and log back in if you added yourself to the Docker group for changes to take effect." 15 85 # تم تقليل الارتفاع لأن المحتوى أقل
+whiptail --title "Installation Complete!" --msgbox "Thank you for installing GoPanel!\n\nAccess GoPanel in your web browser at:\n\n   ${LOCAL_IP}:8080\n\nRemember to log out and log back in if you added yourself to the Docker group for changes to take effect." 15 85
 
 echo -e "${GREEN}✅ GoPanel installation finished. Enjoy! Access at ${LOCAL_IP}:8080${NC}"
