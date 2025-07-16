@@ -26,7 +26,8 @@ display_info() {
     local title="$1"
     local message="$2"
     local duration=${3:-1} # Default duration is 1 second, shorter for less interruption
-    whiptail --title "$title" --infobox "$message" 8 78
+    # Increased size for info boxes
+    whiptail --title "$title" --infobox "$message" 10 80
     sleep $duration
 }
 
@@ -53,17 +54,16 @@ run_with_gauge() {
         done
         wait "$pid" # Ensure command really finishes
         echo 100 # Set to 100% when done
-    ) | whiptail --gauge "$message" 8 78 0 --title "$title"
-
+    ) | whiptail --gauge "$message" 10 80 0 --title "$title" # Increased size for gauge
     local status=$?
     return $status
 }
 
 # --- Welcome Screen with Yes/No ---
-if (whiptail --title "GoPanel Installer" --yesno "Welcome to the GoPanel Installer!\n\nThis script will set up GoPanel on your system. Do you want to continue with the installation?" 12 78) then
+if (whiptail --title "GoPanel Installer" --yesno "Welcome to the GoPanel Installer!\n\nThis script will set up GoPanel on your system. Do you want to continue with the installation?" 15 80) then # Larger size for welcome
     display_info "GoPanel Installer" "Starting installation process..." 2
 else
-    whiptail --title "GoPanel Installer" --msgbox "Installation aborted by user. Exiting." 8 78
+    whiptail --title "GoPanel Installer" --msgbox "Installation aborted by user. Exiting." 10 80 # Larger size for abort message
     exit 1
 fi
 # --- End Welcome Screen ---
@@ -214,6 +214,6 @@ fi
 # ==============================================================================
 # Final Summary - using msgbox instead of infobox to keep window open
 # ==============================================================================
-whiptail --title "Installation Complete" --msgbox "GoPanel installation is complete!\n\nIt is running as root from /opt/gopanel.\n\nTo check status: sudo systemctl status gopanel\nTo view logs: sudo journalctl -u gopanel -f\n\nRemember to log out and back in if you added yourself to the Docker group for changes to take effect." 18 78
+whiptail --title "Installation Complete" --msgbox "GoPanel installation is complete!\n\nIt is running as root from /opt/gopanel.\n\nTo check status: sudo systemctl status gopanel\nTo view logs: sudo journalctl -u gopanel -f\n\nRemember to log out and back in if you added yourself to the Docker group for changes to take effect." 20 85 # Larger size for final message
 
 echo -e "${GREEN}✅ GoPanel installation finished. Enjoy!${NC}"
