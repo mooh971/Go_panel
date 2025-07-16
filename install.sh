@@ -59,9 +59,14 @@ run_with_gauge() {
     return $status
 }
 
-# Initial welcome message (infobox, no OK needed)
-whiptail --title "GoPanel Installer" --infobox "Welcome to the GoPanel Installer! This script will set up GoPanel on your system. Please wait..." 8 78
-sleep 3 # Longer duration for the welcome.
+# --- Welcome Screen with Yes/No ---
+if (whiptail --title "GoPanel Installer" --yesno "Welcome to the GoPanel Installer!\n\nThis script will set up GoPanel on your system. Do you want to continue with the installation?" 12 78) then
+    display_info "GoPanel Installer" "Starting installation process..." 2
+else
+    whiptail --title "GoPanel Installer" --msgbox "Installation aborted by user. Exiting." 8 78
+    exit 1
+fi
+# --- End Welcome Screen ---
 
 # ==============================================================================
 echo -e "${BLUE}=======================================================================${NC}"
@@ -103,14 +108,14 @@ else
 fi
 
 echo -e "${BLUE}-----------------------------------------------------------------------${NC}"
-echo -e "${BLUE}  🚀 Adding user to Docker group...                                   ${NC}"
+echo -e "${BLUE}  🚀 Adding user to Docker group...                                    ${NC}"
 echo -e "${BLUE}-----------------------------------------------------------------------${NC}"
 sudo usermod -aG docker $USER
 echo -e "${GREEN}✅ User added to Docker group. (Note: Log out and back in for changes to take effect).${NC}"
 
 # ==============================================================================
 echo -e "${BLUE}=======================================================================${NC}"
-echo -e "${BLUE}  🚀 SECTION: Go Language Installation                                ${NC}"
+echo -e "${BLUE}  🚀 SECTION: Go Language Installation                                 ${NC}"
 echo -e "${BLUE}=======================================================================${NC}"
 # ==============================================================================
 
@@ -133,26 +138,26 @@ fi
 
 # ==============================================================================
 echo -e "${BLUE}=======================================================================${NC}"
-echo -e "${BLUE}  🚀 SECTION: Project Files Preparation and Copying                   ${NC}"
+echo -e "${BLUE}  🚀 SECTION: Project Files Preparation and Copying                    ${NC}"
 echo -e "${BLUE}=======================================================================${NC}"
 # ==============================================================================
 
 SEVENZ_FILE=$(find . -maxdepth 1 -type f -name "*.7z" | head -n 1)
 
 if [ -f "$SEVENZ_FILE" ]; then
-  display_info "Project Setup" "Found archive $SEVENZ_FILE - extracting..." 1
-  run_with_gauge "Project Setup" "Extracting project files from $SEVENZ_FILE..." "rm -rf ./gopanel_extracted && mkdir -p ./gopanel_extracted && 7z x \"$SEVENZ_FILE\" -o./gopanel_extracted"
-  if [ $? -eq 0 ]; then
-      PROJECT_SOURCE=./gopanel_extracted
-      echo -e "${GREEN}✅ Project files extracted.${NC}"
-  else
-      echo -e "${RED}❌ Failed to extract project files. Exiting.${NC}"
-      exit 1
-  fi
+    display_info "Project Setup" "Found archive $SEVENZ_FILE - extracting..." 1
+    run_with_gauge "Project Setup" "Extracting project files from $SEVENZ_FILE..." "rm -rf ./gopanel_extracted && mkdir -p ./gopanel_extracted && 7z x \"$SEVENZ_FILE\" -o./gopanel_extracted"
+    if [ $? -eq 0 ]; then
+        PROJECT_SOURCE=./gopanel_extracted
+        echo -e "${GREEN}✅ Project files extracted.${NC}"
+    else
+        echo -e "${RED}❌ Failed to extract project files. Exiting.${NC}"
+        exit 1
+    fi
 else
-  echo -e "${YELLOW}📂 No 7z archive found. Copying from current directory.${NC}"
-  PROJECT_SOURCE=.
-  echo -e "${GREEN}✅ Project files prepared from current directory.${NC}"
+    echo -e "${YELLOW}📂 No 7z archive found. Copying from current directory.${NC}"
+    PROJECT_SOURCE=.
+    echo -e "${GREEN}✅ Project files prepared from current directory.${NC}"
 fi
 
 run_with_gauge "File Management" "Copying project files to /opt/gopanel and setting permissions..." "sudo rm -rf /opt/gopanel && sudo mkdir -p /opt/gopanel && sudo cp -r \"$PROJECT_SOURCE\"/* \"$PROJECT_SOURCE\"/.* /opt/gopanel 2>/dev/null || true && sudo chown -R root:root /opt/gopanel"
@@ -165,19 +170,19 @@ fi
 
 # ==============================================================================
 echo -e "${BLUE}=======================================================================${NC}"
-echo -e "${BLUE}  🚀 SECTION: Binary Permissions and Systemd Service Setup            ${NC}"
+echo -e "${BLUE}  🚀 SECTION: Binary Permissions and Systemd Service Setup             ${NC}"
 echo -e "${BLUE}=======================================================================${NC}"
 # ==============================================================================
 
 echo -e "${BLUE}-----------------------------------------------------------------------${NC}"
-echo -e "${BLUE}  🚀 Making GoPanel binary executable...                              ${NC}"
+echo -e "${BLUE}  🚀 Making GoPanel binary executable...                               ${NC}"
 echo -e "${BLUE}-----------------------------------------------------------------------${NC}"
 cd /opt/gopanel
 sudo chmod +x /opt/gopanel/gopanel
 echo -e "${GREEN}✅ GoPanel binary made executable.${NC}"
 
 echo -e "${BLUE}-----------------------------------------------------------------------${NC}"
-echo -e "${BLUE}  🚀 Creating systemd service for GoPanel...                         ${NC}"
+echo -e "${BLUE}  🚀 Creating systemd service for GoPanel...                           ${NC}"
 echo -e "${BLUE}-----------------------------------------------------------------------${NC}"
 sudo tee /etc/systemd/system/gopanel.service > /dev/null <<EOF
 [Unit]
