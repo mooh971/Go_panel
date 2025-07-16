@@ -2,7 +2,7 @@
 
 set -e
 
-# Define colors (not used for terminal echo, but kept for consistency)
+# Define colors (will not be used for echo, but kept in case of future TUI elements)
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -30,6 +30,60 @@ display_info() {
     sleep $duration
 }
 
+# Function to run a series of commands under a single whiptail gauge progress bar
+# Usage: run_section_with_gauge "Section Title" "Overall Message" "Command 1; Command 2; ..." "Failure message"
+run_section_with_gauge() {
+    local section_title="$1"
+    local overall_message="$2"
+    local commands_string="$3"
+    local failure_msg="$4"
+
+    IFS=';' read -ra commands_array <<< "$commands_string" # Split commands by semicolon
+    local total_commands=${#commands_array[@]}
+    local current_command_index=0
+    local progress_step=$((100 / total_commands)) # Percentage per command
+
+    (
+        for cmd in "${commands_array[@]}"; do
+            cmd=$(echo "$cmd" | xargs) # Trim whitespace
+            if [ -z "$cmd" ]; then continue; fi # Skip empty commands
+
+            current_command_index=$((current_command_index + 1))
+            local current_progress=$((current_command_index * progress_step))
+            if [ $current_progress -gt 95 ]; then current_progress=95; fi # Cap at 95%
+
+            # Update gauge message with current action
+            echo "$current_progress"
+            echo "XXX"
+            echo "$overall_message (Step $current_command_index of $total_commands)"
+            echo "Currently: $cmd" # Show the command being executed
+            echo "XXX"
+
+            eval "$cmd" > /dev/null 2>&1
+            local cmd_status=$?
+
+            if [ $cmd_status -ne 0 ]; then
+                # On failure, instantly jump to 100% and exit the subshell with an error
+                echo 100
+                echo "XXX"
+                echo "Failed: $cmd"
+                echo "$failure_msg"
+                echo "XXX"
+                exit 1 # Exit the subshell, whiptail will get non-zero status
+            fi
+        done
+        echo 100 # Ensure 100% when all commands are done
+    ) | whiptail --gauge "$overall_message" 12 80 0 --title "$section_title"
+
+    local gauge_status=$?
+    if [ $gauge_status -ne 0 ]; then
+        whiptail --title "ERROR: $section_title" --msgbox "$failure_msg" 10 80
+        return 1 # Indicate failure
+    fi
+    return 0 # Indicate success
+}
+
+
 # --- Welcome Screen with Yes/No ---
 if (whiptail --title "GoPanel Installer" --yesno "Welcome to the GoPanel Installer!\n\nThis script will set up GoPanel on your system. Do you want to continue with the installation?" 15 80) then
     display_info "GoPanel Installer" "Starting installation process..." 2
@@ -40,23 +94,73 @@ fi
 # --- End Welcome Screen ---
 
 # ==============================================================================
-# Master Installation Gauge
-# This will run all steps under a single, continuous progress bar
+# SECTION: Installing Basic System Requirements
 # ==============================================================================
 
-# Define all installation steps as an array of commands and their descriptions
-declare -a STEPS=(
-    "Updating system package lists..." "sudo apt update"
-    "Installing core development tools (build-essential, curl, wget, git, p7zip-full)..." "sudo apt install -y build-essential curl wget git p7zip-full"
-    "Checking Docker installation..." "" # Placeholder for a check
-    "Downloading and installing Docker Engine..." "curl -fsSL https://get.docker.com | sudo sh"
-    "Adding current user to Docker group..." "sudo usermod -aG docker \$USER" # Use \$USER for deferred expansion
-    "Downloading Go language (v1.24.5)..." "wget -q https://dl.google.com/go/go1.24.5.linux-amd64.tar.gz -O /tmp/go1.24.5.linux-amd64.tar.gz"
-    "Extracting Go language to /usr/local..." "sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go1.24.5.linux-amd64.tar.gz"
-    "Preparing project files (extracting/copying)..." "" # Placeholder for project logic
-    "Copying project files to /opt/gopanel and setting permissions..." "sudo rm -rf /opt/gopanel && sudo mkdir -p /opt/gopanel && sudo cp -r \"\$PROJECT_SOURCE\"/. \"/opt/gopanel/\" 2>/dev/null || true && sudo chown -R root:root /opt/gopanel" # Use \$PROJECT_SOURCE for deferred expansion
-    "Making GoPanel binary executable..." "sudo chmod +x /opt/gopanel/gopanel"
-    "Creating systemd service file for GoPanel..." "sudo tee /etc/systemd/system/gopanel.service > /dev/null <<EOF
+run_section_with_gauge "Requirements" "Installing essential system packages..." \
+    "sudo apt update; sudo apt install -y build-essential curl wget git p7zip-full" \
+    "Failed to install basic requirements. Please check your internet connection and try again." || exit 1
+
+# ==============================================================================
+# SECTION: Docker Installation and Setup
+# ==============================================================================
+
+if ! command -v docker &>/dev/null; then
+    display_info "Docker" "Docker is not installed. Installing it now automatically..." 2
+    run_section_with_gauge "Docker" "Downloading and installing Docker Engine and configuring user group..." \
+        "curl -fsSL https://get.docker.com | sudo sh; sudo usermod -aG docker $USER" \
+        "Failed to install or configure Docker. Exiting." || exit 1
+else
+    display_info "Docker" "Docker is already installed. Skipping installation." 1.5
+    # Even if docker is installed, ensure user is in docker group
+    run_section_with_gauge "Docker" "Ensuring user is in Docker group..." \
+        "sudo usermod -aG docker $USER" \
+        "Failed to add user to Docker group. Please try manually logging out and back in." || exit 1
+fi
+
+
+# ==============================================================================
+# SECTION: Go Language Installation
+# ==============================================================================
+
+GO_VERSION=1.24.5
+run_section_with_gauge "Go Installation" "Downloading and installing Go language (v$GO_VERSION)..." \
+    "wget -q https://dl.google.com/go/go$GO_VERSION.linux-amd64.tar.gz -O /tmp/go$GO_VERSION.linux-amd64.tar.gz; sudo rm -rf /usr/local/go; sudo tar -C /usr/local -xzf /tmp/go$GO_VERSION.linux-amd64.tar.gz" \
+    "Failed to install Go language. Exiting." || exit 1
+
+# Manually update PATH for the current script's execution
+export PATH=$PATH:/usr/local/go/bin
+
+
+# ==============================================================================
+# SECTION: Project Files Preparation and Copying
+# ==============================================================================
+
+SEVENZ_FILE=$(find . -maxdepth 1 -type f -name "*.7z" | head -n 1)
+PROJECT_SOURCE="" # Initialize
+
+if [ -f "$SEVENZ_FILE" ]; then
+    display_info "Project Setup" "Found archive $SEVENZ_FILE - extracting..." 1
+    run_section_with_gauge "Project Setup" "Extracting and copying project files..." \
+        "rm -rf ./gopanel_extracted; mkdir -p ./gopanel_extracted; 7z x -y \"$SEVENZ_FILE\" -o./gopanel_extracted" \
+        "Failed to extract project files. Exiting." || exit 1
+    PROJECT_SOURCE=./gopanel_extracted
+else
+    display_info "Project Setup" "No 7z archive found. Copying from current directory." 1.5
+    PROJECT_SOURCE=.
+fi
+
+run_section_with_gauge "File Management" "Copying project files to /opt/gopanel and setting permissions..." \
+    "sudo rm -rf /opt/gopanel; sudo mkdir -p /opt/gopanel; sudo cp -r \"$PROJECT_SOURCE\"/. \"/opt/gopanel/\" 2>/dev/null || true; sudo chown -R root:root /opt/gopanel" \
+    "Failed to copy project to /opt/gopanel. Exiting." || exit 1
+
+
+# ==============================================================================
+# SECTION: Binary Permissions and Systemd Service Setup
+# ==============================================================================
+
+run_section_with_gauge "Service Setup" "Configuring GoPanel binary and systemd service..." \
+    "sudo chmod +x /opt/gopanel/gopanel; sudo tee /etc/systemd/system/gopanel.service > /dev/null <<EOF
 [Unit]
 Description=GoPanel Server
 After=network.target docker.service
@@ -72,99 +176,13 @@ Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-EOF"
-    "Reloading systemd and starting GoPanel service..." "sudo systemctl daemon-reload && sudo systemctl enable gopanel.service && sudo systemctl restart gopanel.service"
-)
+EOF
+; sudo systemctl daemon-reload; sudo systemctl enable gopanel.service; sudo systemctl restart gopanel.service" \
+    "Failed to set up GoPanel service. Please check system logs for more details." || exit 1
 
-# Calculate total percentage steps
-TOTAL_MAIN_STEPS=${#STEPS[@]}
-TOTAL_PERCENTAGE_PER_STEP=$((100 / (TOTAL_MAIN_STEPS / 2))) # Each pair is desc+cmd
-
-# Global variable to store current progress, accessed by subshell
-GLOBAL_PROGRESS=0
-# Declare PROJECT_SOURCE globally for use inside the subshell and outer script
-PROJECT_SOURCE=""
-
-# This variable should NOT be local if it's assigned outside a function
-gauge_status=0 # Initialize to a default value
-
-(
-    # Start the gauge output
-    for ((i=0; i<TOTAL_MAIN_STEPS; i+=2)); do
-        STEP_DESCRIPTION="${STEPS[i]}"
-        COMMAND="${STEPS[i+1]}"
-
-        # Calculate current progress
-        GLOBAL_PROGRESS=$(((i / 2) * TOTAL_PERCENTAGE_PER_STEP))
-        if [ $GLOBAL_PROGRESS -ge 100 ]; then GLOBAL_PROGRESS=99; fi # Cap for final step
-
-        echo "$GLOBAL_PROGRESS"
-        echo "XXX"
-        echo "$STEP_DESCRIPTION"
-        echo "XXX"
-
-        # Handle special logic steps (Docker check, Project Source)
-        case "$STEP_DESCRIPTION" in
-            "Checking Docker installation...")
-                if command -v docker &>/dev/null; then
-                    # Docker is installed, skip next Docker installation command
-                    echo "$GLOBAL_PROGRESS" # Update progress, but no command executed
-                    echo "XXX"
-                    echo "Docker is already installed. Skipping installation."
-                    echo "XXX"
-                    i=$((i + 2)) # Skip the actual docker install step (desc + cmd)
-                    continue # Go to next iteration of loop
-                fi
-                ;;
-            "Preparing project files (extracting/copying)...")
-                SEVENZ_FILE=$(find . -maxdepth 1 -type f -name "*.7z" | head -n 1)
-                if [ -f "$SEVENZ_FILE" ]; then
-                    COMMAND="rm -rf ./gopanel_extracted && mkdir -p ./gopanel_extracted && 7z x -y \"$SEVENZ_FILE\" -o./gopanel_extracted"
-                    PROJECT_SOURCE="./gopanel_extracted"
-                else
-                    COMMAND="" # No command needed, just set source
-                    PROJECT_SOURCE="."
-                    echo "$GLOBAL_PROGRESS"
-                    echo "XXX"
-                    echo "No 7z archive found. Copying from current directory."
-                    echo "XXX"
-                fi
-                ;;
-        esac
-
-        # Execute the command if not a placeholder
-        if [ -n "$COMMAND" ]; then
-            # Special handling for PATH update for Go
-            if [[ "$STEP_DESCRIPTION" == "Extracting Go language to /usr/local..." ]]; then
-                export PATH=$PATH:/usr/local/go/bin # Ensure PATH is updated for subsequent Go commands in the subshell
-            fi
-            
-            # Execute command (note: we re-evaluate the command string to allow PROJECT_SOURCE expansion)
-            eval "$COMMAND" > /dev/null 2>&1
-            local cmd_status=$?
-            if [ $cmd_status -ne 0 ]; then
-                # On failure, instantly jump to 100% and exit the subshell with an error
-                echo 100
-                echo "XXX"
-                echo "ERROR: Failed during '$STEP_DESCRIPTION'."
-                echo "Please check the terminal for error messages or try again."
-                echo "XXX"
-                exit 1 # Exit the subshell, whiptail will get non-zero status
-            fi
-        fi
-    done
-    echo 100 # Ensure 100% when all commands are done
-) | whiptail --gauge "Starting GoPanel installation. Please wait..." 15 80 0 --title "GoPanel Installation Progress"
-
-# Assign status here, outside the subshell, not using 'local'
-gauge_status=$? 
-if [ $gauge_status -ne 0 ]; then
-    whiptail --title "Installation Failed!" --msgbox "GoPanel installation encountered an error.\nPlease review the messages above or try again." 10 80
-    exit 1 # Exit script if gauge process failed
-fi
 
 # ==============================================================================
-# Final Summary (shown ONLY after the gauge completes successfully)
+# Final Summary
 # ==============================================================================
 
 # Get the primary IP address of the machine
