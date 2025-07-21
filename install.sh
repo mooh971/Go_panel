@@ -207,4 +207,4 @@ fi
 
 whiptail --title "Installation Complete!" --msgbox "Thank you for installing GoPanel!\n\nGoPanel is now running from /opt/gopanel.\n\nAccess GoPanel in your web browser at:\n\n   ${LOCAL_IP}:8080\n\nTo check service status: sudo systemctl status gopanel\nTo view service logs: sudo journalctl -u gopanel -f\n\nRemember to log out and log back in if you added yourself to the Docker group for changes to take effect." 20 85
 
-echo -e "${GREEN}✅ GoPanel installation finished. Enjoy! Access at ${LOCAL_IP}:8080${NC}"
+echo -e "${GREEN}✅ GoPanel installation finished. Enjoy! Access at ${LOCAL_IP}:1234${NC}"
