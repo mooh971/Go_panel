@@ -109,29 +109,6 @@ echo -e "${GREEN}✅ User added to Docker group. (Note: Log out and back in for 
 
 # ==============================================================================
 echo -e "${BLUE}=======================================================================${NC}"
-echo -e "${BLUE}  🚀 SECTION: Go Language Installation                                 ${NC}"
-echo -e "${BLUE}=======================================================================${NC}"
-# ==============================================================================
-
-GO_VERSION=1.24.5
-run_with_gauge "Go Installation" "Downloading Go $GO_VERSION..." "wget -q https://dl.google.com/go/go$GO_VERSION.linux-amd64.tar.gz -O /tmp/go$GO_VERSION.linux-amd64.tar.gz"
-if [ $? -eq 0 ]; then
-    run_with_gauge "Go Installation" "Extracting Go to /usr/local..." "sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go$GO_VERSION.linux-amd64.tar.gz"
-    if [ $? -eq 0 ]; then
-        export PATH=$PATH:/usr/local/go/bin
-        GO_VERSION_CHECK=$(go version 2>/dev/null)
-        echo -e "${GREEN}✅ Go $GO_VERSION_CHECK installed successfully.${NC}"
-    else
-        echo -e "${RED}❌ Failed to extract Go. Exiting.${NC}"
-        exit 1
-    fi
-else
-    echo -e "${RED}❌ Failed to download Go. Exiting.${NC}"
-    exit 1
-fi
-
-# ==============================================================================
-echo -e "${BLUE}=======================================================================${NC}"
 echo -e "${BLUE}  🚀 SECTION: Project Files Preparation and Copying                    ${NC}"
 echo -e "${BLUE}=======================================================================${NC}"
 # ==============================================================================
