@@ -7,14 +7,22 @@ Easily manage your server with simple steps — from installing services to mana
 
 ## ⚠️ Supported Systems
 
-> **GoPanel works only on Debian-based systems.**  
-> Please do not attempt to install it on other Linux distributions.
+> 🛠️ This installation script is **designed exclusively for Debian-based systems.**  
+> If you're using any other Linux distribution, you can still run GoPanel —  
+> but you'll need to install it **manually** (this script won't work outside Debian-based environments).
 
-✅ Examples of supported systems:
+✅ Compatible Debian-based systems:
 - Debian
 - Ubuntu
-- Linux Mint (Debian-based)
-- Any other distro that uses Debian as its base
+- Linux Mint (Debian Edition)
+- Pop!_OS
+- Elementary OS
+- Kali Linux
+- Any other distro derived from Debian
+
+💡 Using a non-Debian system like Arch, Fedora, or openSUSE?  
+> You can still run GoPanel, but **you must install it manually.**
+
 
 ---
 
