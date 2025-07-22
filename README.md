@@ -14,10 +14,7 @@ Easily manage your server with simple steps — from installing services to mana
 ✅ Compatible Debian-based systems:
 - Debian
 - Ubuntu
-- Linux Mint (Debian Edition)
-- Pop!_OS
-- Elementary OS
-- Kali Linux
+- Linux Mint
 - Any other distro derived from Debian
 
 💡 Using a non-Debian system like Arch, Fedora, or openSUSE?  
