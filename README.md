@@ -9,7 +9,7 @@ Easily manage your server with simple steps — from installing services to mana
 
 > 🛠️ This installation script is **designed exclusively for Debian-based systems.**  
 > If you're using any other Linux distribution, you can still run GoPanel —  
-> but you'll need to install it **manually** (this script won't work outside Debian-based environments).
+> but you'll need to install it **manually** .
 
 ✅ Compatible Debian-based systems:
 - Debian
